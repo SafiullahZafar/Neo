@@ -6,12 +6,13 @@ from vosk import Model, KaldiRecognizer
 from piper import PiperVoice
 import threading
 import os
+from core.config import settings
 
 # ----------------------------
 # Load models
 # ----------------------------
-VOSK_MODEL_PATH = "models/vosk_model"
-PIPER_MODEL_PATH = "models/piper_model/en_US-lessac-medium.onnx"
+VOSK_MODEL_PATH = str(settings.vosk_model_path)
+PIPER_MODEL_PATH = str(settings.piper_model_path)
 
 if not os.path.exists(VOSK_MODEL_PATH):
     raise FileNotFoundError("Vosk model not found. Download and place in models/vosk_model")
