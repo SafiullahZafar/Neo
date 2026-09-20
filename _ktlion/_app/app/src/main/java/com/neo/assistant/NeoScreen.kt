@@ -256,8 +256,78 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         button(microphone, "Allow / manage microphone", false) { permission(android.Manifest.permission.RECORD_AUDIO) }
         val calls = card(settings)
         text(calls, "Phone-call control", 20f, ink, true)
-        text(calls, "Not connected", 13f, teal, true)
-        text(calls, "SIM answering and call audio need a separate supported integration. Granting camera, microphone or contacts does not enable them. Neo is not a default dialer yet.", 14f, muted)
+        text(calls, "Manage telephony & calls", 13f, teal, true)
+        text(calls, "Allow Neo to detect phone call state and auto-answer after 3s when screen is off.", 14f, muted)
+        calls.addView(Switch(activity).apply {
+            text = "Enable background call auto-answer (3s)"; textSize = 14f; minHeight = dp(52)
+            isChecked = activity.getSharedPreferences("neo_demo", Activity.MODE_PRIVATE).getBoolean("bg_call_monitoring", false)
+            setOnCheckedChangeListener { _, enabled ->
+                activity.getSharedPreferences("neo_demo", Activity.MODE_PRIVATE).edit().putBoolean("bg_call_monitoring", enabled).apply()
+                if (enabled) NeoForegroundService.start(activity) else NeoForegroundService.stop(activity)
+            }
+        })
+        button(calls, "Allow / manage phone call access", false) { permission(android.Manifest.permission.READ_PHONE_STATE) }
+        button(calls, "💬 Enable WhatsApp Call Auto-Answer (Notification Access)", false) {
+            try {
+                val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+                activity.startActivity(intent)
+            } catch (_: Exception) {
+                android.widget.Toast.makeText(activity, "Open Android Settings -> Special Access -> Notification Access and enable Neo!", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+        button(calls, "⚡ Set Neo as Default Phone App", false) {
+            var alreadyDefault = false
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)
+                if (roleManager != null && roleManager.isRoleHeld(android.app.role.RoleManager.ROLE_DIALER)) {
+                    alreadyDefault = true
+                }
+            } else if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                val telecomManager = activity.getSystemService(android.telecom.TelecomManager::class.java)
+                if (telecomManager?.defaultDialerPackage == activity.packageName) {
+                    alreadyDefault = true
+                }
+            }
+
+            if (alreadyDefault) {
+                android.widget.Toast.makeText(activity, "Neo is ALREADY set as your default phone app!", android.widget.Toast.LENGTH_LONG).show()
+                return@button
+            }
+
+            var launched = false
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                try {
+                    val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)
+                    if (roleManager != null && roleManager.isRoleAvailable(android.app.role.RoleManager.ROLE_DIALER)) {
+                        val intent = roleManager.createRequestRoleIntent(android.app.role.RoleManager.ROLE_DIALER)
+                        activity.startActivityForResult(intent, 801)
+                        launched = true
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.w("NeoScreen", "RoleManager request failed: ${e.message}")
+                }
+            }
+
+            if (!launched && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                try {
+                    val intent = android.content.Intent(android.telecom.TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+                        .putExtra(android.telecom.TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, activity.packageName)
+                    activity.startActivity(intent)
+                    launched = true
+                } catch (e: Exception) {
+                    android.util.Log.w("NeoScreen", "TelecomManager default dialer intent failed: ${e.message}")
+                }
+            }
+
+            if (!launched) {
+                try {
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS)
+                    activity.startActivity(intent)
+                } catch (_: Exception) {
+                    android.widget.Toast.makeText(activity, "Open Android Settings -> Default Apps -> Phone app and select Neo!", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         button(settings, "Open Android app permissions", false, manageAccess)
         text(settings, "In Android settings, open Permissions to allow or deny access. Neo refreshes access status when you return.", 13f, muted)
         activity.setContentView(shell)

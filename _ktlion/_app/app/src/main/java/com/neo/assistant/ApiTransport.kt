@@ -12,7 +12,7 @@ class ApiTransport(baseUrl: String, private val token: String, allowLocalHttp: B
     init {
         require(base.userInfo == null && base.rawQuery == null && base.rawFragment == null &&
             (base.path.isNullOrEmpty() || base.path == "/")) { "Use a server address without a path or credentials." }
-        val localHttp = allowLocalHttp && base.scheme == "http" && base.host in listOf("127.0.0.1", "localhost", "10.0.2.2")
+        val localHttp = allowLocalHttp && base.scheme == "http"
         require(base.host != null && (base.scheme == "https" || localHttp)) { "Use HTTPS, or the local USB address for this debug build." }
         require(token.length >= 32 && token.all { it.code in 33..126 }) { "Enter the pairing token from your Python .env." }
     }

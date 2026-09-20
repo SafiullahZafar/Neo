@@ -6,7 +6,7 @@ android {
     buildFeatures { buildConfig = true }
     defaultConfig {
         applicationId = "com.neo.assistant"
-        minSdk = 29
+        minSdk = 22
         targetSdk = 35
         versionCode = 5
         versionName = "0.5-recovery-preview"

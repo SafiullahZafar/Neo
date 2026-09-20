@@ -1,4 +1,4 @@
-﻿"""Start the mobile API by default; the old desktop experiment is opt-in."""
+"""Start the mobile API by default; the old desktop experiment is opt-in."""
 import argparse
 
 
@@ -12,7 +12,7 @@ def main():
         return
     import uvicorn
     from core.config import settings
-    uvicorn.run('server.api:app', host=settings.api_host, port=settings.api_port, access_log=False)
+    uvicorn.run('server.api:app', host=settings.api_host, port=settings.api_port, access_log=True)
 
 
 if __name__ == '__main__':

@@ -296,6 +296,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         foreground = true
         if (::screen.isInitialized && ::access.isInitialized) {
             refreshPermissions()
+            if (prefs.getBoolean("bg_call_monitoring", false)) NeoForegroundService.start(this)
             if (prefs.getBoolean("auto_sync", true) && connection.token().isNotEmpty()) {
                 val items = records()
                 if ((0 until items.length()).any { !items.getJSONObject(it).optBoolean("synced") }) syncReports()
