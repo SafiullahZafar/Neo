@@ -69,7 +69,13 @@ class NeoNotificationListener : NotificationListenerService() {
                     } else {
                         answerIntent.send()
                     }
-                    LiveCallJournal.event(this, id, "WhatsApp", name ?: "", "Answer action sent; connection not confirmed; greeting and audio unavailable")
+                    LiveCallJournal.event(this, id, "WhatsApp", name ?: "", "Answer action sent; connection not confirmed; direct caller audio unavailable")
+                    SpeakerGreeting.start(this, id,
+                        alive = { LiveCallJournal.enabled(this) && activeNotifications?.any { it.key == sbn.key } == true },
+                        ready = {
+                            val ongoing = activeNotifications?.firstOrNull { it.key == sbn.key }?.notification
+                            ongoing != null && answer(ongoing) == null && SpeakerGreeting.inCall(this)
+                        }, event = { LiveCallJournal.event(this, id, "WhatsApp", name ?: "", it) })
                 } catch (_: Exception) {
                     LiveCallJournal.event(this, id, "WhatsApp", name ?: "", "Answer action failed or expired")
                 }
@@ -81,9 +87,10 @@ class NeoNotificationListener : NotificationListenerService() {
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         pending.remove(sbn.key)?.let {
             handler.removeCallbacks(it.task)
+            SpeakerGreeting.cancel(it.id)
             LiveCallJournal.event(this, it.id, "WhatsApp", "", "Call notification removed; final call outcome unknown")
         }
     }
-    override fun onListenerDisconnected() { handler.removeCallbacksAndMessages(null); pending.clear() }
-    override fun onDestroy() { handler.removeCallbacksAndMessages(null); pending.clear(); super.onDestroy() }
+    override fun onListenerDisconnected() { handler.removeCallbacksAndMessages(null); pending.values.forEach { SpeakerGreeting.cancel(it.id) }; pending.clear() }
+    override fun onDestroy() { handler.removeCallbacksAndMessages(null); pending.values.forEach { SpeakerGreeting.cancel(it.id) }; pending.clear(); super.onDestroy() }
 }

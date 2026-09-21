@@ -13,6 +13,7 @@ class AssistantSettingsActivity : Activity() {
     private var engine: TextToSpeech? = null
     private var ready = false
     private var foreground = false
+    private lateinit var speakerStatus: TextView
     private lateinit var voiceList: Spinner
     private lateinit var voiceStatus: TextView
     private lateinit var preview: Button
@@ -46,6 +47,31 @@ class AssistantSettingsActivity : Activity() {
         }
         label("Applies to SIM, eligible WhatsApp calls and practice calls. A call already ringing keeps its original timer. If the caller hangs up or voicemail takes over first, Neo cannot answer it.")
         button("My voice: record and clone") { startActivity(Intent(this, MyVoiceActivity::class.java)) }
+        label("Experimental speaker greeting", 21f)
+        label("Optional acoustic test after Neo requests pickup. It plays a greeting locally; echo cancellation may prevent the caller hearing it. It cannot listen to, record or answer the caller's reply. No cloned voice or Gemini key is needed.")
+        layout.addView(Switch(this).apply {
+            text = "Enable experimental speaker greeting"
+            isChecked = SpeakerGreeting.enabled(this@AssistantSettingsActivity)
+            setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean("speaker_experiment", checked).apply()
+                if (!checked) SpeakerGreeting.stop()
+                speakerStatus.text = if (checked) "Enabled for the next eligible auto-answered call." else "Speaker greeting disabled."
+            }
+        })
+        speakerStatus = label(prefs.getString("speaker_status", "No speaker experiment yet.") ?: "")
+        label("SIM: Neo requests speakerphone for its auto-answered greeting, then restores the previous route if still applicable. WhatsApp: tap Speaker yourself after pickup. Disconnect Bluetooth/headsets and use a comfortable volume. Only the other phone can confirm whether it hears the greeting.")
+        button("Try greeting during current call") {
+            engine?.stop()
+            if (!SpeakerGreeting.enabled(this)) speakerStatus.text = "Enable the speaker experiment first."
+            else if (!SpeakerGreeting.inCall(this)) speakerStatus.text = "No active call audio mode detected. Connect a test call and turn its Speaker on first."
+            else SpeakerGreeting.start(this, "manual-speaker-test",
+                alive = { SpeakerGreeting.inCall(this) }, ready = { SpeakerGreeting.inCall(this) },
+                event = { if (!isDestroyed && foreground) speakerStatus.text = it })
+        }
+        button("Stop speaker greeting") {
+            SpeakerGreeting.stop()
+            speakerStatus.text = prefs.getString("speaker_status", "No greeting is playing.")
+        }
         label("Offline voices", 21f)
         label("Neo adds no voice subscription or API charges. Choose from offline voices already installed in your Android speech engine. The available voices and languages depend on your phone; Neo does not purchase or download voices.")
         voiceStatus = label("Loading installed voices?")
@@ -87,7 +113,7 @@ class AssistantSettingsActivity : Activity() {
             try { startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
             catch (_: Exception) { voiceStatus.text = "Open Android Settings and search for Text-to-speech output." }
         }
-        label("Voice selection applies to greeting previews, practice replies and spoken reports. Live SIM/WhatsApp caller audio is still not connected. Greetings are currently written in English; selecting another voice does not translate them.")
+        label("Voice selection applies to previews, practice replies, spoken reports and the optional speaker experiment. Direct SIM/WhatsApp caller audio is still not connected. Greetings are currently written in English; selecting another voice does not translate them.")
         engine = TextToSpeech(this) { status ->
             runOnUiThread {
                 if (!isDestroyed) {
@@ -119,7 +145,11 @@ class AssistantSettingsActivity : Activity() {
             else -> "${available.size} installed offline voice(s) available. Preview before saving."
         }
     }
-    override fun onResume() { super.onResume(); foreground = true; if (ready) loadVoices() }
+    override fun onResume() {
+        super.onResume(); foreground = true
+        speakerStatus.text = getSharedPreferences("neo_demo", MODE_PRIVATE).getString("speaker_status", "No speaker experiment yet.")
+        if (ready) loadVoices()
+    }
     override fun onPause() { foreground = false; engine?.stop(); super.onPause() }
     override fun onDestroy() { engine?.shutdown(); engine = null; super.onDestroy() }
 }

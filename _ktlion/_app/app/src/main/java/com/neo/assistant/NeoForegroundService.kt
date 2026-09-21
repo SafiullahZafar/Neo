@@ -47,6 +47,7 @@ class NeoForegroundService : Service() {
         }
     }
     override fun onDestroy() {
+        SpeakerGreeting.stop()
         if (unlockRegistered) unregisterReceiver(unlockReceiver)
         super.onDestroy()
     }

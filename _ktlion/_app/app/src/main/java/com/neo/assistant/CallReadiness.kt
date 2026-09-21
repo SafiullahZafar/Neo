@@ -24,6 +24,6 @@ object CallReadiness {
         return "WhatsApp notification access: ${when (notificationAccess) { true -> "allowed"; false -> "not allowed ? enable below"; null -> "could not check" }}.\n" +
             "SIM default phone role: ${when (dialer) { true -> "Neo"; false -> "not Neo"; null -> "could not check" }}.\n" +
             "WhatsApp pickup also requires a verifiable contact and an Answer action.\n" +
-            "Caller audio: not connected. Automatic pickup does not include greeting, conversation recording or transcription. Android speech and cloned voices currently play app previews only."
+            "Direct caller audio: not connected. The optional speaker experiment only attempts a local greeting; caller hearing is unverified. Conversation recording and transcription are unavailable."
     }
 }

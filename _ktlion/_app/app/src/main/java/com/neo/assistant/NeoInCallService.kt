@@ -3,13 +3,14 @@ package com.neo.assistant
 import android.os.Handler
 import android.os.Looper
 import android.telecom.Call
+import android.telecom.CallAudioState
 import android.telecom.InCallService
 import java.util.UUID
 
 @android.annotation.TargetApi(23)
 class NeoInCallService : InCallService() {
     private val handler = Handler(Looper.getMainLooper())
-    private data class Tracked(val callback: Call.Callback, val answer: Runnable)
+    private data class Tracked(val callback: Call.Callback, val answer: Runnable, val id: String)
     private val tracked = mutableMapOf<Call, Tracked>()
 
     override fun onCallAdded(call: Call) {
@@ -22,6 +23,7 @@ class NeoInCallService : InCallService() {
         val caller = name ?: "Unknown caller"
         fun record(status: String) = LiveCallJournal.event(this, id, "SIM", caller, status)
         var requested = false
+        var greeted = false
         record(if (name == null) "Ringing: unverified contact; auto-answer blocked" else "Ringing: waiting ${delayMs / 1000} seconds")
         val answer = Runnable {
             if (CallRules.mayAnswer(LiveCallJournal.enabled(this), LiveCallJournal.contactName(this, number) != null, call.state == Call.STATE_RINGING)) {
@@ -35,22 +37,43 @@ class NeoInCallService : InCallService() {
         val callback = object : Call.Callback() {
             override fun onStateChanged(current: Call, state: Int) {
                 if (state != Call.STATE_RINGING) handler.removeCallbacks(answer)
+                if (state != Call.STATE_ACTIVE && state != Call.STATE_RINGING) SpeakerGreeting.cancel(id)
                 when (state) {
-                    Call.STATE_ACTIVE -> record(if (requested) "Connected after Neo request; greeting not transmitted; audio unavailable" else "Connected without Neo request")
+                    Call.STATE_ACTIVE -> {
+                        record(if (requested) "Connected after Neo request; direct caller audio unavailable" else "Connected without Neo request")
+                        if (requested && !greeted && SpeakerGreeting.enabled(this@NeoInCallService)) {
+                            greeted = true
+                            SpeakerGreeting.start(this@NeoInCallService, id,
+                                alive = { LiveCallJournal.enabled(this@NeoInCallService) && call.state == Call.STATE_ACTIVE },
+                                ready = { call.state == Call.STATE_ACTIVE },
+                                prepareRoute = {
+                                    val previous = callAudioState?.route
+                                    check(((callAudioState?.supportedRouteMask ?: 0) and CallAudioState.ROUTE_SPEAKER) != 0)
+                                    setAudioRoute(CallAudioState.ROUTE_SPEAKER)
+                                    record("Speaker route requested for acoustic test; no volume change")
+                                    val restoreRoute: () -> Unit = {
+                                        if (previous != null && call.state == Call.STATE_ACTIVE && callAudioState?.route == CallAudioState.ROUTE_SPEAKER) {
+                                            setAudioRoute(previous)
+                                        }
+                                    }
+                                    restoreRoute
+                                }, event = { record(it) })
+                        }
+                    }
                     Call.STATE_DISCONNECTED -> record("Call ended; no audio or transcript captured")
                 }
             }
         }
-        tracked[call] = Tracked(callback, answer)
+        tracked[call] = Tracked(callback, answer, id)
         call.registerCallback(callback, handler)
         if (name != null) handler.postDelayed(answer, delayMs)
     }
     override fun onCallRemoved(call: Call) {
-        tracked.remove(call)?.let { handler.removeCallbacks(it.answer); call.unregisterCallback(it.callback) }
+        tracked.remove(call)?.let { handler.removeCallbacks(it.answer); call.unregisterCallback(it.callback); SpeakerGreeting.cancel(it.id) }
         super.onCallRemoved(call)
     }
     override fun onDestroy() {
-        tracked.forEach { (call, entry) -> call.unregisterCallback(entry.callback) }
+        tracked.forEach { (call, entry) -> call.unregisterCallback(entry.callback); SpeakerGreeting.cancel(entry.id) }
         tracked.clear(); handler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
