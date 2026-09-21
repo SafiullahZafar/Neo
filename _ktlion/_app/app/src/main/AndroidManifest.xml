@@ -11,7 +11,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL" />
     <uses-permission android:name="android.permission.MANAGE_OWN_CALLS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.MODIFY_PHONE_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -22,6 +21,9 @@
         <intent><action android:name="android.speech.RecognitionService" /></intent>
     </queries>
     <application android:label="Neo · Local demo" android:usesCleartextTraffic="true" android:icon="@drawable/ic_neo" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true">
+        <activity android:name=".MyVoiceActivity" android:exported="false" />
+        <activity android:name=".AssistantSettingsActivity" android:exported="false" />
+        <activity android:name=".CallJournalActivity" android:exported="false" />
         <activity android:name=".PresenceActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:launchMode="singleTop" android:exported="true">
             <intent-filter>

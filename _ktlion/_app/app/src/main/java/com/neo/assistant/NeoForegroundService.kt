@@ -40,8 +40,22 @@ class NeoForegroundService : Service() {
         }
     }
 
+    private var unlockRegistered = false
+    private val unlockReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == Intent.ACTION_USER_PRESENT) NeoNotifications(context).liveSummary(LiveCallJournal.unread(context))
+        }
+    }
+    override fun onDestroy() {
+        if (unlockRegistered) unregisterReceiver(unlockReceiver)
+        super.onDestroy()
+    }
     override fun onCreate() {
         super.onCreate()
+        val filter = android.content.IntentFilter(Intent.ACTION_USER_PRESENT)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(unlockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        else { @Suppress("DEPRECATION") registerReceiver(unlockReceiver, filter) }
+        unlockRegistered = true
         try {
             createNotificationChannel()
             val notification = buildNotification()
@@ -57,10 +71,12 @@ class NeoForegroundService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed in startForeground", e)
+            stopSelf()
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!LiveCallJournal.enabled(this)) { stopSelf(); return START_NOT_STICKY }
         return START_STICKY
     }
 
@@ -99,7 +115,7 @@ class NeoForegroundService : Service() {
         }
         return builder
             .setContentTitle("Neo is monitoring calls")
-            .setContentText("Background 3-second call assistant active.")
+            .setContentText("Known contacts only. Uses your selected answer delay. No call audio recording.")
             .setSmallIcon(R.drawable.ic_stat_neo)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

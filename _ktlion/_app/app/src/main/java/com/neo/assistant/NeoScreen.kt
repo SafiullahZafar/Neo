@@ -28,6 +28,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
     lateinit var save: Button
     lateinit var end: Button
     lateinit var connectionStatus: TextView
+    lateinit var callReadinessStatus: TextView
     lateinit var contactsStatus: TextView
     lateinit var cameraStatus: TextView
     lateinit var microphoneStatus: TextView
@@ -106,7 +107,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         text(hero, "LOCAL PREVIEW", 11f, teal, true)
         text(hero, "Meet your call assistant", 23f, ink, true)
         text(hero, "Try Neo's response before connecting real calls. You're always in control.", 15f, muted)
-        button(hero, "Try a call  →") { show("Test") }
+        button(hero, "Try a call  â†’") { show("Test") }
         val connection = card(home)
         text(connection, "Your Python connection", 19f, ink, true)
         connectionStatus = text(connection, "Not connected yet. Pair with your local Python service.", 14f, muted)
@@ -129,7 +130,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
             setOnCheckedChangeListener { _, enabled -> voiceChanged(enabled) }
         })
         text(preferences, "Reports are read aloud only when you ask.", 13f, muted)
-        text(home, "No real calls connected · No background monitoring", 12f, muted)
+        text(home, "No real calls connected Â· No background monitoring", 12f, muted)
 
         val test = pages.getValue("Test")
         text(test, "Give Neo a try.", 30f, ink, true)
@@ -141,7 +142,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         scenarios = column().apply { test.addView(this) }
         val known = card(scenarios)
         text(known, "Someone you know", 21f, ink, true)
-        text(known, "Wait six seconds for Neo, or take the call yourself.", 14f, muted)
+        text(known, "Neo uses your selected answer delay. You can take the call yourself.", 14f, muted)
         button(known, "Test saved contact") { start(true) }
         button(known, "Choose a phone contact", false, contactTest)
         val unknown = card(scenarios)
@@ -152,7 +153,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         answerButton = button(actions, "I'll take this call", action = answer)
         rejectButton = button(actions, "Decline call", false, reject)
         message = EditText(activity).apply {
-            hint = "Type the practice caller's message…"; textSize = 16f; minLines = 3
+            hint = "Type the practice caller's messageâ€¦"; textSize = 16f; minLines = 3
             setTextColor(ink); setHintTextColor(muted); gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             filters = arrayOf(android.text.InputFilter.LengthFilter(4000))
@@ -208,7 +209,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
             isChecked = assistanceEnabled
             setOnCheckedChangeListener { _, enabled -> assistanceChanged(enabled) }
         })
-        text(automation, "When enabled, Neo waits six seconds and handles known practice callers only. You can take over at any point.", 14f, muted)
+        text(automation, "When enabled, Neo waits for your selected delay and handles known practice callers only. You can take over at any point.", 14f, muted)
         automation.addView(Switch(activity).apply {
             text = "Retry pending uploads automatically"; textSize = 14f; minHeight = dp(56)
             isChecked = activity.getSharedPreferences("neo_demo", Activity.MODE_PRIVATE).getBoolean("auto_sync", true)
@@ -254,12 +255,25 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         microphoneStatus = text(microphone, "", 13f, teal)
         text(microphone, "Optional dictation for practice messages. On-device recognition is preferred when available; otherwise your phone's recognition service may process audio online. This does not capture SIM-call audio.", 14f, muted)
         button(microphone, "Allow / manage microphone", false) { permission(android.Manifest.permission.RECORD_AUDIO) }
+        val timing = card(settings)
+        text(timing, "Answer delay and voice", 20f, ink, true)
+        text(timing, "Choose 1?60 seconds and an installed offline voice. Changes apply to new calls.", 14f, muted)
+        button(timing, "Choose delay and preview voices", false) {
+            activity.startActivity(android.content.Intent(activity, AssistantSettingsActivity::class.java))
+        }
+        val live = card(settings)
+        text(live, "Owner status and real call activity", 20f, ink, true)
+        text(live, "Review real call events and set your greeting preview. Call audio and conversation recording are not connected.", 14f, muted)
+        button(live, "Open call activity and owner status", false) {
+            activity.startActivity(android.content.Intent(activity, CallJournalActivity::class.java))
+        }
         val calls = card(settings)
         text(calls, "Phone-call control", 20f, ink, true)
+        callReadinessStatus = text(calls, CallReadiness.summary(activity), 14f, muted)
         text(calls, "Manage telephony & calls", 13f, teal, true)
-        text(calls, "Allow Neo to detect phone call state and auto-answer after 3s when screen is off.", 14f, muted)
+        text(calls, "SIM answering requires the default dialer role. Only verified contacts are eligible after your selected delay. WhatsApp requires notification access and a verifiable caller identity.", 14f, muted)
         calls.addView(Switch(activity).apply {
-            text = "Enable background call auto-answer (3s)"; textSize = 14f; minHeight = dp(52)
+            text = "Enable known-contact auto-answer"; textSize = 14f; minHeight = dp(52)
             isChecked = activity.getSharedPreferences("neo_demo", Activity.MODE_PRIVATE).getBoolean("bg_call_monitoring", false)
             setOnCheckedChangeListener { _, enabled ->
                 activity.getSharedPreferences("neo_demo", Activity.MODE_PRIVATE).edit().putBoolean("bg_call_monitoring", enabled).apply()
@@ -267,7 +281,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
             }
         })
         button(calls, "Allow / manage phone call access", false) { permission(android.Manifest.permission.READ_PHONE_STATE) }
-        button(calls, "💬 Enable WhatsApp Call Auto-Answer (Notification Access)", false) {
+        button(calls, "ðŸ’¬ Enable WhatsApp Call Auto-Answer (Notification Access)", false) {
             try {
                 val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
                 activity.startActivity(intent)
@@ -275,7 +289,7 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
                 android.widget.Toast.makeText(activity, "Open Android Settings -> Special Access -> Notification Access and enable Neo!", android.widget.Toast.LENGTH_LONG).show()
             }
         }
-        button(calls, "⚡ Set Neo as Default Phone App", false) {
+        button(calls, "âš¡ Set Neo as Default Phone App", false) {
             var alreadyDefault = false
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 val roleManager = activity.getSystemService(android.app.role.RoleManager::class.java)

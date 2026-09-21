@@ -25,6 +25,7 @@ class NeoNotifications(private val context: Context) {
                 NotificationChannel(REPORTS, "Reports", NotificationManager.IMPORTANCE_DEFAULT).apply {
                     description = "A practice report is ready to review."
                 },
+                NotificationChannel(LIVE, "Real call activity", NotificationManager.IMPORTANCE_DEFAULT),
                 NotificationChannel(SYNC, "Python sync", NotificationManager.IMPORTANCE_LOW).apply {
                     description = "Report uploads and pending-sync reminders."
                 }
@@ -84,7 +85,7 @@ class NeoNotifications(private val context: Context) {
         val description = when {
             !known -> "Unknown practice caller. Neo will not auto-answer."
             !enabled -> "Demo assistance is paused. This practice call is yours."
-            else -> "Known practice caller. Neo gives you six seconds to answer."
+            else -> "Known practice caller. Neo gives you ${AssistantPreferences.delayMs(context) / 1000} seconds to answer."
         }
         post(CALLS, "Practice call ringing", description, "Test", ongoing = true)
     }
@@ -103,6 +104,12 @@ class NeoNotifications(private val context: Context) {
         }
     }
 
+    fun liveSummary(count: Int): Boolean {
+        if (count <= 0) return false
+        return post(LIVE, "Neo call activity", "$count call record(s) to review. Open Neo for details.", "Live")
+    }
+    fun clearLive() { manager.cancel(id(LIVE)) }
+
     fun test(): Boolean = post(REPORTS, "Neo notifications are ready", "This is a test notification. Tap to return to Settings.", "Settings")
     fun clearReports() { manager.cancel(id(REPORTS)); manager.cancel(id(SYNC)) }
     fun clearActiveCall() { manager.cancel(id(CALLS)) }
@@ -112,7 +119,7 @@ class NeoNotifications(private val context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (manager.getNotificationChannel(channel)?.importance == NotificationManager.IMPORTANCE_NONE) return false
         }
-        val intent = Intent(context, MainActivity::class.java)
+        val intent = Intent(context, if (page == "Live") CallJournalActivity::class.java else MainActivity::class.java)
             .setAction("com.neo.assistant.OPEN.$page")
             .putExtra("neo_page", page)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -134,6 +141,7 @@ class NeoNotifications(private val context: Context) {
             .setContentTitle(title)
             .setContentText(text)
             .setContentIntent(tap)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
             .setOnlyAlertOnce(true)
             .setAutoCancel(!ongoing)
             .setOngoing(ongoing)
@@ -155,8 +163,9 @@ class NeoNotifications(private val context: Context) {
         return try { manager.notify(id(channel), builder.build()); true } catch (_: Exception) { false }
     }
 
-    private fun id(channel: String) = when (channel) { CALLS -> 401; REPORTS -> 402; else -> 403 }
+    private fun id(channel: String) = when (channel) { CALLS -> 401; REPORTS -> 402; LIVE -> 404; else -> 403 }
     companion object {
+        const val LIVE = "neo_live_activity"
         const val CALLS = "neo_practice_calls"
         const val REPORTS = "neo_reports"
         const val SYNC = "neo_sync"

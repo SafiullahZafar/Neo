@@ -144,7 +144,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         caller = if (known) selectedName?.take(160) ?: "Demo contact" else "Unknown number"
         reply = ""
         message.setText("")
-        session = CallSession(known, SystemClock.elapsedRealtime(), prefs.getBoolean("assistance", true))
+        session = CallSession(known, SystemClock.elapsedRealtime(), prefs.getBoolean("assistance", true), AssistantPreferences.delayMs(this))
         screen.show("Test")
         renderControls()
         notices.ringing(known, prefs.getBoolean("assistance", true))
@@ -164,11 +164,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             } else if (current.state == CallState.RINGING) {
                 status.text = if (!current.assistanceEnabled) "Assistance is paused. Neo will not respond to this practice call."
                 else if (current.knownContact) {
-                    val seconds = ((CallSession.WAIT_MS - (now - current.startedAt)).coerceAtLeast(0) + 999) / 1000
+                    val seconds = ((current.answerDelayMs - (now - current.startedAt)).coerceAtLeast(0) + 999) / 1000
                     "$caller is ringing. Neo responds in ${seconds}s."
                 } else "Unknown number is ringing. Neo will never auto-answer."
             }
-            if (now - current.startedAt >= CallSession.MAX_DURATION_MS) {
+            if (now - current.startedAt >= current.maxDurationMs) {
                 finishScenario(if (current.state == CallState.ASSISTANT) "No message received before timeout." else "Missed call. Neo did not answer.")
                 return
             }
@@ -258,7 +258,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     }
 
     private fun speak(text: String) {
-        if (!speechReady || tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "neo") != TextToSpeech.SUCCESS)
+        if (!speechReady || tts == null || !AssistantPreferences.applyVoice(this, tts!!) || tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "neo") != TextToSpeech.SUCCESS)
             Toast.makeText(this, "Speech unavailable; the text is shown on screen.", Toast.LENGTH_SHORT).show()
     }
 
@@ -283,6 +283,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun refreshPermissions() {
         screen.notificationStatus.text = notices.state()
+        screen.callReadinessStatus.text = CallReadiness.summary(this)
         screen.contactsStatus.text = if (access.allowed(Manifest.permission.READ_CONTACTS)) "Allowed · device contacts available" else "Not allowed · sample calls still work"
         screen.cameraStatus.text = if (access.allowed(Manifest.permission.CAMERA)) "Allowed · used only when you start a check" else "Not allowed · presence stays uncertain"
         screen.microphoneStatus.text = if (access.allowed(Manifest.permission.RECORD_AUDIO)) "Allowed · dictation available if supported" else "Not allowed · type messages instead"
@@ -294,6 +295,11 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     override fun onResume() {
         super.onResume()
         foreground = true
+        val unreadCalls = LiveCallJournal.unread(this)
+        if (unreadCalls > 0) {
+            NeoNotifications(this).liveSummary(unreadCalls)
+            android.widget.Toast.makeText(this, "$unreadCalls real call record(s) to review in Settings > Call activity", android.widget.Toast.LENGTH_LONG).show()
+        }
         if (::screen.isInitialized && ::access.isInitialized) {
             refreshPermissions()
             if (prefs.getBoolean("bg_call_monitoring", false)) NeoForegroundService.start(this)
@@ -438,7 +444,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
         val token = EditText(this).apply {
             hint = "Pairing token"; setSingleLine(true)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setText(connection.token()); importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
+            setText(connection.token())
+            if (Build.VERSION.SDK_INT >= 26) importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
             fields.addView(this)
         }
         val dialog = android.app.AlertDialog.Builder(this).setTitle("Connect to Python")

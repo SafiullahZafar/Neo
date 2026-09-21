@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.config import Settings, settings
+from server.voice import VoiceService, voice_router
 
 GREETING = "Hello, this is Neo, an assistant. They are unavailable right now. Please leave a message."
 
@@ -30,6 +31,7 @@ class Report(BaseModel):
 
 def create_app(config: Settings = settings) -> FastAPI:
     database = config.reports_path
+    voice = VoiceService(config)
 
     @contextmanager
     def connection():
@@ -47,7 +49,10 @@ def create_app(config: Settings = settings) -> FastAPI:
         Path(database).parent.mkdir(parents=True, exist_ok=True)
         with connection() as db:
             db.execute("CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, time INTEGER NOT NULL, payload TEXT NOT NULL)")
-        yield
+        try:
+            yield
+        finally:
+            voice.close()
 
     app = FastAPI(title="Neo mobile API", version="0.2.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
@@ -58,6 +63,7 @@ def create_app(config: Settings = settings) -> FastAPI:
             raise HTTPException(401, "Invalid or missing API token", headers={"WWW-Authenticate": "Bearer"})
 
     protected = [Depends(authorize)]
+    app.include_router(voice_router(voice, protected))
 
     @app.get("/")
     def index():

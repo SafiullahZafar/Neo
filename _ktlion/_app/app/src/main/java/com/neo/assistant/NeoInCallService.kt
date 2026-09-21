@@ -1,48 +1,57 @@
 package com.neo.assistant
 
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.telecom.Call
 import android.telecom.InCallService
-import android.util.Log
+import java.util.UUID
 
+@android.annotation.TargetApi(23)
 class NeoInCallService : InCallService() {
-    companion object {
-        private const val TAG = "NeoInCallService"
-        const val ANSWER_DELAY_MS = 3000L
-    }
-
     private val handler = Handler(Looper.getMainLooper())
+    private data class Tracked(val callback: Call.Callback, val answer: Runnable)
+    private val tracked = mutableMapOf<Call, Tracked>()
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
-        Log.d(TAG, "onCallAdded: state=${call.state}")
-        val prefs = getSharedPreferences("neo_demo", MODE_PRIVATE)
-        if (!prefs.getBoolean("bg_call_monitoring", false)) return
-
-        if (call.state == Call.STATE_RINGING) {
-            handler.postDelayed({
+        if (!LiveCallJournal.enabled(this) || call.state != Call.STATE_RINGING) return
+        val delayMs = AssistantPreferences.delayMs(this)
+        val id = UUID.randomUUID().toString()
+        val number = call.details.handle?.takeIf { it.scheme == "tel" }?.schemeSpecificPart
+        val name = LiveCallJournal.contactName(this, number)
+        val caller = name ?: "Unknown caller"
+        fun record(status: String) = LiveCallJournal.event(this, id, "SIM", caller, status)
+        var requested = false
+        record(if (name == null) "Ringing: unverified contact; auto-answer blocked" else "Ringing: waiting ${delayMs / 1000} seconds")
+        val answer = Runnable {
+            if (CallRules.mayAnswer(LiveCallJournal.enabled(this), LiveCallJournal.contactName(this, number) != null, call.state == Call.STATE_RINGING)) {
                 try {
-                    if (call.state == Call.STATE_RINGING) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            call.answer(0)
-                        } else {
-                            @Suppress("DEPRECATION")
-                            call.answer(0)
-                        }
-                        Log.d(TAG, "Call auto-answered after 3s via InCallService")
-                        try { NeoNotifications(this).assistantStarted() } catch (_: Exception) {}
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to answer call via InCallService: ${e.message}", e)
-                }
-            }, ANSWER_DELAY_MS)
+                    requested = true
+                    record("Answer requested; waiting for call connection")
+                    call.answer(0)
+                } catch (_: Exception) { requested = false; record("Answer request failed") }
+            }
         }
+        val callback = object : Call.Callback() {
+            override fun onStateChanged(current: Call, state: Int) {
+                if (state != Call.STATE_RINGING) handler.removeCallbacks(answer)
+                when (state) {
+                    Call.STATE_ACTIVE -> record(if (requested) "Connected after Neo request; greeting not transmitted; audio unavailable" else "Connected without Neo request")
+                    Call.STATE_DISCONNECTED -> record("Call ended; no audio or transcript captured")
+                }
+            }
+        }
+        tracked[call] = Tracked(callback, answer)
+        call.registerCallback(callback, handler)
+        if (name != null) handler.postDelayed(answer, delayMs)
     }
-
     override fun onCallRemoved(call: Call) {
+        tracked.remove(call)?.let { handler.removeCallbacks(it.answer); call.unregisterCallback(it.callback) }
         super.onCallRemoved(call)
-        handler.removeCallbacksAndMessages(null)
+    }
+    override fun onDestroy() {
+        tracked.forEach { (call, entry) -> call.unregisterCallback(entry.callback) }
+        tracked.clear(); handler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 }

@@ -28,6 +28,10 @@ class Settings:
     vosk_model_path: Path = field(default_factory=lambda: project_path("NEO_VOSK_MODEL_PATH", "models/vosk_model"))
     piper_model_path: Path = field(default_factory=lambda: project_path("NEO_PIPER_MODEL_PATH", "models/piper_model/en_US-lessac-medium.onnx"))
 
+    voice_path: Path = field(default_factory=lambda: project_path("NEO_VOICE_PATH", "data/my_voice"))
+    voice_python: Path = field(default_factory=lambda: project_path("NEO_VOICE_PYTHON", ".venv-voice/Scripts/python.exe" if os.name == "nt" else ".venv-voice/bin/python"))
+    voice_device: str = field(default_factory=lambda: os.getenv("NEO_VOICE_DEVICE", "cpu"))
+
     def __post_init__(self) -> None:
         if not 1 <= self.api_port <= 65535:
             raise ValueError("NEO_API_PORT must be between 1 and 65535")

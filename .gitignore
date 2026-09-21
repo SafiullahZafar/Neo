@@ -14,3 +14,7 @@ _ktlion/_app/.gradle/
 _ktlion/_app/.kotlin/
 _ktlion/_app/**/build/
 _ktlion/_app/local.properties
+
+# Local voice engine and downloaded runtime
+.venv-voice/
+.voice-runtime/

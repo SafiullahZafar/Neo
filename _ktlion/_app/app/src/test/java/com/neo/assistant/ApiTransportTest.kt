@@ -28,6 +28,21 @@ class ApiTransportTest {
         assertThrows(IllegalArgumentException::class.java) { ApiTransport("https://example.com", "short", false) }
     }
 
+    @Test fun voiceApiRoundTripWithoutChangingOwnerSample() {
+        val address = System.getenv("NEO_TEST_URL")
+        val token = System.getenv("NEO_TEST_TOKEN")
+        assumeTrue(address != null && token != null)
+        val api = ApiTransport(address!!, token!!, true)
+        assertTrue(String(api.voiceRequest("GET", "/v1/voice")).contains("reference_saved"))
+        assertEquals(401, assertThrows(ApiHttpException::class.java) {
+            ApiTransport(address, dummy, true).voiceRequest("GET", "/v1/voice")
+        }.status)
+        assertEquals(422, assertThrows(ApiHttpException::class.java) {
+            api.voiceRequest("PUT", "/v1/voice/reference", "invalid".toByteArray(), "audio/wav", true)
+        }.status)
+        assertThrows(IllegalArgumentException::class.java) { api.voiceRequest("GET", "/v1/voice/../reports") }
+    }
+
     @Test fun realPythonRoundTrip() {
         val address = System.getenv("NEO_TEST_URL")
         val token = System.getenv("NEO_TEST_TOKEN")

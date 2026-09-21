@@ -1,0 +1,2 @@
+# Install in a separate Python 3.11 environment, not the API virtualenv.
+chatterbox-tts==0.1.6
