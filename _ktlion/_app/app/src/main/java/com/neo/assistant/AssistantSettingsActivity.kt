@@ -47,6 +47,7 @@ class AssistantSettingsActivity : Activity() {
         }
         label("Applies to SIM, eligible WhatsApp calls and practice calls. A call already ringing keeps its original timer. If the caller hangs up or voicemail takes over first, Neo cannot answer it.")
         button("My voice: record and clone") { startActivity(Intent(this, MyVoiceActivity::class.java)) }
+        button("SIM Call Audio Diagnostics") { startActivity(Intent(this, SimAudioDiagnosticsActivity::class.java)) }
         label("Experimental speaker greeting", 21f)
         label("Optional acoustic test after Neo requests pickup. It plays a greeting locally; echo cancellation may prevent the caller hearing it. It cannot listen to, record or answer the caller's reply. No cloned voice or Gemini key is needed.")
         layout.addView(Switch(this).apply {

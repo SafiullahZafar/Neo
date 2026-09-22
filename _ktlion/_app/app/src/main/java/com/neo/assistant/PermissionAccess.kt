@@ -48,6 +48,13 @@ class PermissionAccess(private val activity: Activity) {
         val ungranted = permissions.filter { !allowed(it) }.toTypedArray()
         if (ungranted.isEmpty()) { settings(); return }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ungranted.any { prefs.getBoolean(it, false) && !activity.shouldShowRequestPermissionRationale(it) }) {
+                AlertDialog.Builder(activity).setTitle("Manage access in Android")
+                    .setMessage("$explanation\n\nA permission was previously denied. Android may require you to change it in app Settings.")
+                    .setNegativeButton("Not now") { _, _ -> onCancel() }.setOnCancelListener { onCancel() }
+                    .setPositiveButton("Open settings") { _, _ -> settings() }.show()
+                return
+            }
             AlertDialog.Builder(activity).setTitle("Choose what Neo can access")
                 .setMessage(explanation).setNegativeButton("Not now") { _, _ -> onCancel() }.setOnCancelListener { onCancel() }
                 .setPositiveButton("Continue") { _, _ ->

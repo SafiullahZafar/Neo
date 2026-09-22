@@ -269,6 +269,9 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         }
         val calls = card(settings)
         text(calls, "Phone-call control", 20f, ink, true)
+        button(calls, "SIM Assistant status, permissions and live test", false) {
+            activity.startActivity(android.content.Intent(activity, SimAudioDiagnosticsActivity::class.java))
+        }
         callReadinessStatus = text(calls, CallReadiness.summary(activity), 14f, muted)
         text(calls, "Manage telephony & calls", 13f, teal, true)
         text(calls, "SIM answering requires the default dialer role. Only verified contacts are eligible after your selected delay. WhatsApp requires notification access and a verifiable caller identity.", 14f, muted)

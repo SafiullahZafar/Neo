@@ -9,6 +9,17 @@ from server.api import create_app
 
 
 class ApiTests(unittest.TestCase):
+    def test_sim_readiness_requires_auth_and_does_not_claim_phone_audio(self):
+        self.assertEqual(self.client.get("/v1/sim/readiness").status_code, 401)
+        result = self.client.get("/v1/sim/readiness", headers=self.headers)
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["sim_audio_transport"], "NOT_CONNECTED")
+        self.assertEqual(result.json()["conversation"], "UNAVAILABLE")
+        self.assertFalse(result.json()["models_loaded"])
+        self.assertFalse(result.json()["paid_services_required"])
+        self.assertNotIn(self.config.api_token, result.text)
+        self.assertNotIn(str(self.config.vosk_model_path), result.text)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.config = Settings(api_token="test-token-" * 4, reports_path=Path(self.temp.name) / "reports.sqlite3")

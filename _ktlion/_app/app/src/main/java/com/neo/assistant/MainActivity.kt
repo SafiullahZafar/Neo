@@ -267,7 +267,8 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
     private fun requestAccess(permission: String) {
         pendingPermission = null; pendingPermissionAction = null
         val explanation = when (permission) {
-            Manifest.permission.READ_CONTACTS -> "Allow contacts to select a real contact for a practice call. The full address book is never sent to Python."
+            Manifest.permission.READ_PHONE_STATE -> "Allow phone state access to observe SIM call state. Default-dialer access controls answering; this permission does not expose caller audio."
+            Manifest.permission.READ_CONTACTS -> "Allow contacts to verify known callers for auto-answer and select practice contacts. The full address book is never sent to Python."
             Manifest.permission.CAMERA -> "Allow the camera for a short presence check that you start on screen. No photos are saved or uploaded, and the camera stops when you leave."
             Manifest.permission.POST_NOTIFICATIONS -> "Allow notifications for practice call updates, saved reports and Python sync results. You can switch each category off in Settings. This does not monitor real SIM calls."
             else -> "Allow microphone access to dictate practice messages. Your phone's speech recognition service may process audio online if on-device recognition is unavailable. You can keep typing instead."

@@ -79,6 +79,16 @@ def create_app(config: Settings = settings) -> FastAPI:
     def policy():
         return {"answer_delay_ms": 6000, "contacts_only": True, "greeting": GREETING, "real_calls_enabled": False}
 
+    @app.get("/v1/sim/readiness", dependencies=protected)
+    def sim_readiness():
+        # Report the actual server boundary, not the phone's untested capabilities.
+        # Do not import desktop speech_io: that loads models and opens PC audio.
+        return {"sim_audio_transport": "NOT_CONNECTED", "conversation": "UNAVAILABLE",
+                "vosk_files_present": (config.vosk_model_path / "am" / "final.mdl").is_file(),
+                "piper_files_present": config.piper_model_path.is_file(),
+                "models_loaded": False, "paid_services_required": False,
+                "phone_audio_verification": "REQUIRED_ON_DEVICE"}
+
     @app.post("/v1/reports", dependencies=protected)
     def save_report(report: Report):
         payload = report.model_dump(mode="json")

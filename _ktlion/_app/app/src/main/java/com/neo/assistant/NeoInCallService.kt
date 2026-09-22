@@ -12,9 +12,17 @@ class NeoInCallService : InCallService() {
     private val handler = Handler(Looper.getMainLooper())
     private data class Tracked(val callback: Call.Callback, val answer: Runnable, val id: String)
     private val tracked = mutableMapOf<Call, Tracked>()
+    private val audioObservers = mutableMapOf<Call, Call.Callback>()
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
+        val observer = object : Call.Callback() {
+            override fun onStateChanged(current: Call, state: Int) { SimAudioSession.update(this@NeoInCallService, current) }
+            override fun onDetailsChanged(current: Call, details: Call.Details) { SimAudioSession.update(this@NeoInCallService, current) }
+        }
+        audioObservers[call] = observer
+        call.registerCallback(observer, handler)
+        SimAudioSession.update(this, call)
         if (!LiveCallJournal.enabled(this) || call.state != Call.STATE_RINGING) return
         val delayMs = AssistantPreferences.delayMs(this)
         val id = UUID.randomUUID().toString()
@@ -69,12 +77,21 @@ class NeoInCallService : InCallService() {
         if (name != null) handler.postDelayed(answer, delayMs)
     }
     override fun onCallRemoved(call: Call) {
+        audioObservers.remove(call)?.let { call.unregisterCallback(it) }
+        SimAudioSession.remove(call)
         tracked.remove(call)?.let { handler.removeCallbacks(it.answer); call.unregisterCallback(it.callback); SpeakerGreeting.cancel(it.id) }
         super.onCallRemoved(call)
     }
     override fun onDestroy() {
+        audioObservers.forEach { (call, callback) -> call.unregisterCallback(callback) }
+        audioObservers.clear()
+        SimAudioSession.clear()
         tracked.forEach { (call, entry) -> call.unregisterCallback(entry.callback); SpeakerGreeting.cancel(entry.id) }
         tracked.clear(); handler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+    override fun onCallAudioStateChanged(audioState: CallAudioState) {
+        super.onCallAudioStateChanged(audioState)
+        SimAudioSession.route = audioState.route
     }
 }
