@@ -28,6 +28,8 @@ class NeoForegroundService : Service() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start service", e)
+                val detail = ErrorHistory.describe(context, NeoProblems.monitor)
+                android.os.Handler(android.os.Looper.getMainLooper()).post { android.widget.Toast.makeText(context, detail, android.widget.Toast.LENGTH_LONG).show() }
             }
         }
 
@@ -72,6 +74,7 @@ class NeoForegroundService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed in startForeground", e)
+            ErrorHistory.describe(this, NeoProblems.monitor)
             stopSelf()
         }
     }

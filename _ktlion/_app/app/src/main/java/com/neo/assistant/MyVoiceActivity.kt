@@ -118,6 +118,7 @@ class MyVoiceActivity : Activity() {
         current.record(reference) { error -> runOnUiThread {
             if (recorder === current) {
                 recorder = null; handler.removeCallbacks(clock)
+                current.problem?.let { ErrorHistory.describe(this, it) }
                 if (!isDestroyed) { controls(); recordingStatus.text = error ?: "${current.seconds} seconds saved locally. Listen, then upload when ready." }
             }
         } }
@@ -126,7 +127,7 @@ class MyVoiceActivity : Activity() {
         super.onRequestPermissionsResult(code, permissions, results)
         if (code == 906 && foreground) {
             if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) beginRecording()
-            else recordingStatus.text = "Microphone access is needed to record. Allow it in Android app permissions when ready."
+            else recordingStatus.text = ErrorHistory.describe(this, NeoProblems.micPermission)
         }
     }
     private fun request(action: (ApiTransport) -> ByteArray, done: (ByteArray) -> Unit) {
@@ -138,19 +139,14 @@ class MyVoiceActivity : Activity() {
                 val result = action(ApiTransport(connection.url, connection.token(), BuildConfig.DEBUG))
                 runOnUiThread { if (!isDestroyed) {
                     busy = false; controls()
-                    try { done(result) } catch (_: Exception) { status.text = "Unexpected response or audio could not be saved. Check the paired server and retry." }
+                    try { done(result) } catch (error: Exception) { status.text = ErrorHistory.describe(this, if (error is java.io.IOException) NeoProblems.storage else NeoProblems.response) }
                 } }
             } catch (error: Exception) {
                 runOnUiThread { if (!isDestroyed) {
                     busy = false; controls()
-                    status.text = when ((error as? ApiHttpException)?.status) {
-                        401 -> "Pairing token rejected. Check your Python connection in Neo Home."
-                        409 -> "A preview is running, not ready, or no server sample exists. Check status before retrying."
-                        413, 415, 422 -> "Sample rejected. Record 10?20 seconds of clear speech, avoiding silence and distortion, then upload again."
-                        503 -> "Voice engine is not installed. Run setup_voice.py on the Python server first."
-                        404 -> "Voice API or preview unavailable. Restart the updated Python server and check status."
-                        else -> "Could not complete the request. Check pairing, Python and USB forwarding; then check status before retrying."
-                    }
+                    status.text = ErrorHistory.describe(this,
+                        (error as? ApiHttpException)?.let { NeoProblems.voiceHttp(it.status) }
+                            ?: ConnectionFailure.problem(error))
                 } }
             }
         }
@@ -180,10 +176,10 @@ class MyVoiceActivity : Activity() {
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
                 setOnCompletionListener { stopPlayback() }
-                setOnErrorListener { _, _, _ -> stopPlayback(); status.text = "Audio could not be played."; true }
+                setOnErrorListener { _, _, _ -> stopPlayback(); status.text = ErrorHistory.describe(this@MyVoiceActivity, NeoProblems.playback); true }
                 prepare(); start()
             }
-        } catch (_: Exception) { stopPlayback(); status.text = "Audio could not be played." }
+        } catch (_: Exception) { stopPlayback(); status.text = ErrorHistory.describe(this@MyVoiceActivity, NeoProblems.playback) }
     }
     private fun stopPlayback() { player?.release(); player = null }
     override fun onResume() { super.onResume(); foreground = true }

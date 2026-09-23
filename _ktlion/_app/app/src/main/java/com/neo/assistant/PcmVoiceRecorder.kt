@@ -14,12 +14,15 @@ class PcmVoiceRecorder {
     @Volatile private var cancelled = false
     @Volatile var seconds = 0
         private set
+    @Volatile var problem: NeoProblem? = null
+        private set
     fun stop(discard: Boolean = false) { cancelled = discard; stopped = true }
     @android.annotation.SuppressLint("MissingPermission")
     fun record(destination: File, finished: (String?) -> Unit) {
         Thread {
             var recorder: AudioRecord? = null
             var error: String? = null
+            var saving = false
             try {
                 val bufferSize = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                 check(bufferSize > 0)
@@ -43,12 +46,16 @@ class PcmVoiceRecorder {
                         header.put("RIFF".toByteArray()).putInt(size + 36).put("WAVEfmt ".toByteArray())
                         header.putInt(16).putShort(1).putShort(1).putInt(16000).putInt(32000)
                             .putShort(2).putShort(16).put("data".toByteArray()).putInt(size)
+                        saving = true
                         val temporary = File(destination.parentFile, "my-voice.tmp")
                         temporary.outputStream().use { it.write(header.array()); pcm.writeTo(it) }
                         check(temporary.renameTo(destination))
                     }
                 } else error = "Recording cancelled; nothing new saved."
-            } catch (_: Exception) { error = "Microphone unavailable or recording interrupted. Check permission and try again." }
+            } catch (failure: Exception) {
+                problem = if (saving) NeoProblems.storage else NeoProblems.audioFailure(failure)
+                error = problem?.display()
+            }
             finally {
                 try { recorder?.stop() } catch (_: Exception) {}
                 recorder?.release()

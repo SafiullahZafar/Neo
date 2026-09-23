@@ -18,7 +18,7 @@ class CapturedAudioRecognizer(private val context: Context) {
     fun recognize(pcm: ByteArray, phrase: String = SimTestPhrase.CAPTURE, result: (CapturedRecognition) -> Unit) {
         stop()
         if (Build.VERSION.SDK_INT < 33 || !SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
-            result(CapturedRecognition(message = "Offline STT of captured audio unavailable on this device. No remote speech claim can be made.")); return
+            result(CapturedRecognition(message = ErrorHistory.describe(context, NeoProblems.noOfflineStt))); return
         }
         val id = generation
         fun finish(message: String, text: String = "", matched: Boolean? = null) {
@@ -35,7 +35,7 @@ class CapturedAudioRecognizer(private val context: Context) {
                 override fun onRmsChanged(value: Float) {}
                 override fun onBufferReceived(buffer: ByteArray?) {}
                 override fun onEndOfSpeech() {}
-                override fun onError(error: Int) { finish("Offline STT failed (code $error); remote capture UNVERIFIED") }
+                override fun onError(error: Int) { finish(ErrorHistory.describe(context, NeoProblems.recognition(error))) }
                 override fun onResults(results: Bundle?) {
                     val recognized = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
                     // Persist only the fixed phrase match, never incidental caller speech.
@@ -53,9 +53,9 @@ class CapturedAudioRecognizer(private val context: Context) {
                 .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_SAMPLING_RATE, 16000)
                 .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_CHANNEL_COUNT, 1)
                 .putExtra(RecognizerIntent.EXTRA_AUDIO_SOURCE_ENCODING, AudioFormat.ENCODING_PCM_16BIT)
-            timeout = Runnable { finish("Offline STT timed out; remote capture UNVERIFIED") }.also { handler.postDelayed(it, 15000) }
+            timeout = Runnable { finish(ErrorHistory.describe(context, NeoProblems.recognition(6))) }.also { handler.postDelayed(it, 15000) }
             recognizer?.startListening(intent)
-        } catch (_: Exception) { finish("Offline STT unavailable for captured input") }
+        } catch (error: Exception) { finish(ErrorHistory.describe(context, if (error is java.io.IOException) NeoProblems.storage else NeoProblems.recognition(5))) }
     }
     fun stop() {
         generation++

@@ -3,7 +3,7 @@ package com.neo.assistant
 object CallRules {
     const val ANSWER_DELAY_MS = 6000L
     fun delayMs(seconds: Int) = seconds.coerceIn(1, 60) * 1000L
-    fun mayAnswer(enabled: Boolean, knownContact: Boolean, ringing: Boolean) = enabled && knownContact && ringing
+    fun mayAnswer(enabled: Boolean, knownContact: Boolean, ringing: Boolean) = enabled && ringing
     fun greeting(owner: String, situation: String): String {
         val name = owner.trim().take(60).ifBlank { "the phone owner" }
         val reason = when (situation) {

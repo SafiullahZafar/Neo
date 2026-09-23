@@ -2,7 +2,21 @@ package com.neo.assistant
 
 /** Actionable errors without displaying URLs, tokens or exception messages. */
 object ConnectionFailure {
-    fun message(error: Exception): String = when (error) {
+    fun message(error: Exception): String = problem(error).display()
+    fun problem(error: Exception): NeoProblem {
+        val code = when (error) {
+            is ApiHttpException -> "API_HTTP_${error.status}"
+            is java.net.SocketTimeoutException -> "API_TIMEOUT"
+            is java.net.UnknownHostException -> "API_DNS"
+            is javax.net.ssl.SSLException -> "API_TLS"
+            is java.net.ConnectException, is java.net.NoRouteToHostException -> "API_UNREACHABLE"
+            is IllegalArgumentException -> "API_CONFIGURATION"
+            else -> "API_UNKNOWN"
+        }
+        return NeoProblem(code, "Python request did not complete", instruction(error),
+            "Follow the connection checks above, then retry. Unsynced local reports are retained.")
+    }
+    private fun instruction(error: Exception): String = when (error) {
         is ApiHttpException -> when (error.status) {
             401, 403 -> "Python is reachable, but the pairing token was rejected. Pair again in Neo Settings with NEO_API_TOKEN from the Python .env."
             404 -> "Python is reachable but this endpoint is missing. Restart main.py from the updated Neo project."

@@ -70,6 +70,20 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(result.status_code, 503)
         self.assertEqual(self.client.get("/v1/voice", headers=self.headers).json()["job"], None)
 
+    def test_worker_missing_file_reports_reason_without_exception_details(self):
+        self.upload(); self.config.voice_python.touch()
+        with patch("server.voice.subprocess.run", side_effect=FileNotFoundError("private-local-path")):
+            result = self.client.post("/v1/voice/preview", headers=self.headers, json={"text": "Test"})
+            job_id = result.json()["id"]
+            for _ in range(100):
+                status = self.client.get(f"/v1/voice/jobs/{job_id}", headers=self.headers).json()
+                if status["state"] != "generating": break
+                time.sleep(0.01)
+            self.assertEqual(status["state"], "failed")
+            self.assertIn("VOICE_FILE_MISSING", status["message"])
+            self.assertNotIn("private-local-path", status["message"])
+            self.assertEqual(self.client.get(f"/v1/voice/jobs/{job_id}/audio", headers=self.headers).status_code, 409)
+
     def test_job_audio_and_delete_with_injected_worker_not_real_model(self):
         self.upload(); self.config.voice_python.touch()
         def worker(*args, **kwargs):

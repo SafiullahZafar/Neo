@@ -23,6 +23,7 @@
     </queries>
     <application android:label="Neo · Local demo" android:usesCleartextTraffic="true" android:icon="@drawable/ic_neo" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:dataExtractionRules="@xml/data_extraction_rules" android:supportsRtl="true">
         <activity android:name=".MyVoiceActivity" android:exported="false" />
+        <activity android:name=".ErrorHistoryActivity" android:exported="false" />
         <activity android:name=".SimAudioDiagnosticsActivity" android:exported="false" />
         <activity android:name=".AssistantSettingsActivity" android:exported="false" />
         <activity android:name=".CallJournalActivity" android:exported="false" />

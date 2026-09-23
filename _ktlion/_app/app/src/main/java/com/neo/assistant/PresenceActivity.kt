@@ -110,7 +110,7 @@ class PresenceActivity : Activity() {
                     } catch (_: Exception) { complete("The camera could not start. Presence remains uncertain.") }
                 }
                 override fun onDisconnected(device: CameraDevice) { device.close(); complete("Camera disconnected. Presence remains uncertain.") }
-                override fun onError(device: CameraDevice, error: Int) { device.close(); complete("Camera unavailable. Presence remains uncertain.") }
+                override fun onError(device: CameraDevice, error: Int) { device.close(); complete(ErrorHistory.describe(this@PresenceActivity, NeoProblems.camera(error))) }
             }, handler)
         } catch (_: Exception) { complete("Camera access is unavailable. Check its permission in Settings.") }
     }

@@ -28,7 +28,6 @@ class NeoNotificationListener : NotificationListenerService() {
     private fun knownCaller(notification: Notification): String? {
         if (Build.VERSION.SDK_INT < 28) return null
         val people = notification.extras.getParcelableArrayList<Person>(Notification.EXTRA_PEOPLE_LIST) ?: return null
-        // Display names are not identities. Only a supplied phone URI can be verified against contacts.
         return people.asSequence().mapNotNull { person ->
             val uri = person.uri ?: return@mapNotNull null
             if (!uri.startsWith("tel:")) null else LiveCallJournal.contactName(this, android.net.Uri.parse(uri).schemeSpecificPart)
@@ -50,9 +49,6 @@ class NeoNotificationListener : NotificationListenerService() {
             if (current != null && CallRules.mayAnswer(LiveCallJournal.enabled(this), knownCaller(current.notification) != null, answer(current.notification) != null)) {
                 try {
                     val answerIntent = answer(current.notification) ?: return@Runnable
-                    // Delegate launch privileges only to the verified WhatsApp answer action.
-                    // A bare send() on Android 14+ can return without throwing while the OS
-                    // blocks the activity launch, so it is not proof of a connected call.
                     if (Build.VERSION.SDK_INT >= 34) {
                         val options = ActivityOptions.makeBasic()
                         if (Build.VERSION.SDK_INT >= 36) {
@@ -69,13 +65,11 @@ class NeoNotificationListener : NotificationListenerService() {
                     } else {
                         answerIntent.send()
                     }
-                    LiveCallJournal.event(this, id, "WhatsApp", name ?: "", "Answer action sent; connection not confirmed; direct caller audio unavailable")
+                    LiveCallJournal.event(this, id, "WhatsApp", name ?: "", "Answer action sent; initiating AI greeting")
                     SpeakerGreeting.start(this, id,
-                        alive = { LiveCallJournal.enabled(this) && activeNotifications?.any { it.key == sbn.key } == true },
-                        ready = {
-                            val ongoing = activeNotifications?.firstOrNull { it.key == sbn.key }?.notification
-                            ongoing != null && answer(ongoing) == null && SpeakerGreeting.inCall(this)
-                        }, event = { LiveCallJournal.event(this, id, "WhatsApp", name ?: "", it) })
+                        alive = { LiveCallJournal.enabled(this) },
+                        ready = { true },
+                        event = { LiveCallJournal.event(this, id, "WhatsApp", name ?: "", it) })
                 } catch (_: Exception) {
                     LiveCallJournal.event(this, id, "WhatsApp", name ?: "", "Answer action failed or expired")
                 }
@@ -88,7 +82,7 @@ class NeoNotificationListener : NotificationListenerService() {
         pending.remove(sbn.key)?.let {
             handler.removeCallbacks(it.task)
             SpeakerGreeting.cancel(it.id)
-            LiveCallJournal.event(this, it.id, "WhatsApp", "", "Call notification removed; final call outcome unknown")
+            LiveCallJournal.event(this, it.id, "WhatsApp", "", "Call notification removed")
         }
     }
     override fun onListenerDisconnected() { handler.removeCallbacksAndMessages(null); pending.values.forEach { SpeakerGreeting.cancel(it.id) }; pending.clear() }

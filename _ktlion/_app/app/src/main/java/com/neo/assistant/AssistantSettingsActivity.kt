@@ -123,7 +123,7 @@ class AssistantSettingsActivity : Activity() {
                         override fun onStart(id: String?) {}
                         override fun onDone(id: String?) {}
                         @Deprecated("Legacy callback") override fun onError(id: String?) {
-                            runOnUiThread { if (foreground) voiceStatus.text = "Speech engine could not play this voice. Try another installed voice." }
+                            runOnUiThread { if (foreground) voiceStatus.text = ErrorHistory.describe(this@AssistantSettingsActivity, NeoProblems.speech(-1)) }
                         }
                     })
                     loadVoices()
@@ -133,7 +133,7 @@ class AssistantSettingsActivity : Activity() {
     }
     private fun loadVoices() {
         val tts = engine
-        if (!ready || tts == null) { voiceStatus.text = "Speech engine not ready. Check Android speech settings."; return }
+        if (!ready || tts == null) { voiceStatus.text = ErrorHistory.describe(this, NeoProblems.noVoice); return }
         available = AssistantPreferences.voices(tts)
         voiceList.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, available.map { "${it.locale.displayName} / ${it.name}" })
         val selected = getSharedPreferences("neo_demo", MODE_PRIVATE).getString("tts_voice", null)

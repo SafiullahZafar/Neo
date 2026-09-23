@@ -49,11 +49,11 @@ class StandardSimCallAudioBridge(private val context: Context) : NeoCallAudioBri
         return "Audio mode=${manager.mode} (0 NORMAL, 2 IN_CALL, 3 IN_COMMUNICATION)\nCommunication device=$communication\nAvailable communication devices=$available\nTelecom route=${SimAudioSession.route} (1 earpiece, 2 Bluetooth, 4 wired, 8 speaker)\n$devices"
     }
     override fun startListening(source: Int, aec: Boolean?, ns: Boolean?, result: (String, ByteArray?) -> Unit) {
-        if (!permitted(Manifest.permission.RECORD_AUDIO)) { result("PERMISSION_DENIED: microphone", null); return }
+        if (!permitted(Manifest.permission.RECORD_AUDIO)) { result(ErrorHistory.describe(context, NeoProblems.micPermission), null); return }
         if (source in listOf(MediaRecorder.AudioSource.VOICE_CALL, MediaRecorder.AudioSource.VOICE_UPLINK, MediaRecorder.AudioSource.VOICE_DOWNLINK) && !permitted("android.permission.CAPTURE_AUDIO_OUTPUT")) {
-            result("PERMISSION_DENIED: this source requires privileged CAPTURE_AUDIO_OUTPUT; no recording attempted", null); return
+            result(ErrorHistory.describe(context, NeoProblems.protectedAudio), null); return
         }
-        val token = try { begin() } catch (e: IllegalStateException) { result(e.message ?: "Unavailable", null); return }
+        val token = try { begin() } catch (e: IllegalStateException) { result(ErrorHistory.describe(context, if (busy) NeoProblems.busy else NeoProblems.noCall), null); return }
         Thread {
             var recorder: AudioRecord? = null
             val effects = mutableListOf<AudioEffect>()
@@ -94,21 +94,21 @@ class StandardSimCallAudioBridge(private val context: Context) : NeoCallAudioBri
                 captured = output.toByteArray()
                 val silenced = if (Build.VERSION.SDK_INT >= 29) recorder.activeRecordingConfiguration?.isClientSilenced?.toString() ?: "UNKNOWN" else "UNKNOWN (requires API 29+)"
                 outcome = "${if (rms == 0) "SILENCE_ONLY" else "AVAILABLE: signal origin UNKNOWN"}; samples=$samples RMS=$rms; actual input=$routes; Android reports silenced=$silenced\n$processing\nApp-session effects do not control the cellular uplink DSP. Remote capture is UNVERIFIED."
-            } catch (_: SecurityException) { outcome = "PERMISSION_DENIED by Android" }
-            catch (e: Exception) { outcome = "UNSUPPORTED / capture failed (${e.javaClass.simpleName})" }
+            } catch (_: SecurityException) { outcome = ErrorHistory.describe(context, NeoProblems.captureDenied) }
+            catch (e: Exception) { outcome = ErrorHistory.describe(context, NeoProblems.audioFailure(e)) }
             finally {
                 try { recorder?.stop() } catch (_: Exception) { }
                 effects.forEach { try { it.release() } catch (_: Exception) { } }
                 recorder?.release()
             }
-            main.post { if (epoch.get() == token) { busy = false; if (valid(token)) result(outcome, captured) else result("CANCELLED: call or route changed", null) } }
+            main.post { if (epoch.get() == token) { busy = false; if (valid(token)) result(outcome, captured) else result(ErrorHistory.describe(context, NeoProblems.routeChanged), null) } }
         }.start()
     }
 
     /** 0 media TTS; 1 communication attributes (never changes cellular mode); 2 preferred telephony AudioTrack. */
     override fun playReply(strategy: Int, text: String, result: (String, Boolean) -> Unit) {
         if (text.isBlank() || text.length > 300) { result("Reply must contain 1-300 characters", false); return }
-        val token = try { begin() } catch (e: IllegalStateException) { result(e.message ?: "Unavailable", false); return }
+        val token = try { begin() } catch (e: IllegalStateException) { result(ErrorHistory.describe(context, if (busy) NeoProblems.busy else NeoProblems.noCall), false); return }
         fun finish(message: String, completed: Boolean) {
             main.post {
                 if (epoch.get() == token) {
@@ -120,10 +120,10 @@ class StandardSimCallAudioBridge(private val context: Context) : NeoCallAudioBri
             }
         }
         val device = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type == AudioDeviceInfo.TYPE_TELEPHONY }
-        if (strategy == 2 && device == null) { finish("No exposed telephony output", false); return }
+        if (strategy == 2 && device == null) { finish(ErrorHistory.describe(context, NeoProblems.noTelephonyOutput), false); return }
         val synthesizedFile = if (strategy == 2) try {
             File.createTempFile("neo-route-", ".wav", context.cacheDir).also { pendingFile = it }
-        } catch (_: Exception) { finish("Temporary audio file unavailable", false); return } else null
+        } catch (_: Exception) { finish(ErrorHistory.describe(context, NeoProblems.storage), false); return } else null
         val attributes = AudioAttributes.Builder().setUsage(if (strategy == 0) AudioAttributes.USAGE_MEDIA else AudioAttributes.USAGE_VOICE_COMMUNICATION).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
         timeout = Runnable { finish("Playback timeout", false) }.also { main.postDelayed(it, 30000) }
         tts = TextToSpeech(context) { status ->
@@ -131,12 +131,12 @@ class StandardSimCallAudioBridge(private val context: Context) : NeoCallAudioBri
                 if (!valid(token)) { finish("Call or route changed", false); return@post }
                 val engine = tts
                 if (status != TextToSpeech.SUCCESS || engine == null || !AssistantPreferences.applyVoice(context, engine)) {
-                    finish("Offline speech voice unavailable", false); return@post
+                    finish(ErrorHistory.describe(context, NeoProblems.noVoice), false); return@post
                 }
                 engine.setAudioAttributes(attributes)
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {}
-                    @Deprecated("Legacy callback") override fun onError(id: String?) { finish("Speech engine error", false) }
+                    @Deprecated("Legacy callback") override fun onError(id: String?) { finish(ErrorHistory.describe(context, NeoProblems.speech(-1)), false) }
                     override fun onDone(id: String?) {
                         if (!valid(token)) { finish("Call or route changed", false); return }
                         if (strategy != 2) { finish("LOCAL_PLAYBACK completed; actual TTS route unavailable; REMOTE_UNVERIFIED", true); return }
@@ -161,7 +161,7 @@ class StandardSimCallAudioBridge(private val context: Context) : NeoCallAudioBri
                                 }
                                 val done = valid(token) && track.playbackHeadPosition >= pcm.bytes.size / (pcm.channels * 2)
                                 finish("AudioTrack preferred=TELEPHONY#${device?.id}; actual=$routes; REMOTE_UNVERIFIED", done)
-                            } catch (e: Exception) { finish("Telephony playback ${e.javaClass.simpleName}", false) }
+                            } catch (e: Exception) { finish(ErrorHistory.describe(context, NeoProblems.audioFailure(e, output = true)), false) }
                             finally { try { track?.stop() } catch (_: Exception) { }; track?.release(); file.delete() }
                         }.start()
                     }

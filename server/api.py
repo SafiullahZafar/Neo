@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core.config import Settings, settings
 from server.voice import VoiceService, voice_router
+from server.errors import install_error_handlers
 
 GREETING = "Hello, this is Neo, an assistant. They are unavailable right now. Please leave a message."
 
@@ -57,6 +58,7 @@ def create_app(config: Settings = settings) -> FastAPI:
     app = FastAPI(title="Neo mobile API", version="0.2.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None, openapi_url=None)
     bearer = HTTPBearer(auto_error=False)
+    install_error_handlers(app)
 
     def authorize(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)]):
         if credentials is None or not secrets.compare_digest(credentials.credentials.encode(), config.api_token.encode()):

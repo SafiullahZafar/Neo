@@ -259,7 +259,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
 
     private fun speak(text: String) {
         if (!speechReady || tts == null || !AssistantPreferences.applyVoice(this, tts!!) || tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "neo") != TextToSpeech.SUCCESS)
-            Toast.makeText(this, "Speech unavailable; the text is shown on screen.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, ErrorHistory.describe(this, NeoProblems.noVoice), Toast.LENGTH_LONG).show()
     }
 
     override fun onInit(status: Int) { speechReady = status == TextToSpeech.SUCCESS }
@@ -392,7 +392,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 override fun onError(error: Int) {
                     if (recognizer !== engine) return
                     stopDictation()
-                    Toast.makeText(this@MainActivity, "No message captured. Try again or type it below.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, ErrorHistory.describe(this@MainActivity, NeoProblems.recognition(error)), Toast.LENGTH_LONG).show()
                 }
                 override fun onResults(results: Bundle?) {
                     if (recognizer !== engine) return
@@ -414,7 +414,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             handler.postDelayed(dictationTimeout, 20_000)
         } catch (_: Exception) {
             stopDictation()
-            Toast.makeText(this, "Microphone unavailable. You can type instead.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, ErrorHistory.describe(this, NeoProblems.capture), Toast.LENGTH_LONG).show()
         }
     }
 
@@ -483,7 +483,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
             return
         }
         val client = try { ApiTransport(connection.url, secret, BuildConfig.DEBUG) }
-            catch (_: Exception) { screen.connectionStatus.text = "Check your server address and pairing token."; return }
+            catch (error: Exception) { screen.connectionStatus.text = ErrorHistory.describe(this, ConnectionFailure.problem(error)); return }
         val items = records()
         val pending = mutableListOf<JSONObject>()
         for (index in 0 until items.length()) {
@@ -511,6 +511,7 @@ class MainActivity : Activity(), TextToSpeech.OnInitListener {
                 }
             } catch (error: Exception) {
                 failure = ConnectionProblem.from(error)
+                ErrorHistory.describe(this, ConnectionFailure.problem(error))
             }
             handler.post {
                 if (isDestroyed) return@post

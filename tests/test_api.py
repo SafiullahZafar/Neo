@@ -20,6 +20,18 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn(self.config.api_token, result.text)
         self.assertNotIn(str(self.config.vosk_model_path), result.text)
 
+    def test_errors_explain_next_step_without_echoing_request_data(self):
+        bad = dict(self.report, time="private-secret-value")
+        response = self.client.post("/v1/reports", json=bad, headers=self.headers)
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json()["error"]["code"], "API_HTTP_422")
+        self.assertTrue(response.json()["error"]["action"])
+        self.assertNotIn("private-secret-value", response.text)
+        self.assertNotIn(self.config.api_token, response.text)
+        unauthorized = self.client.get("/v1/policy")
+        self.assertEqual(unauthorized.headers["www-authenticate"], "Bearer")
+        self.assertEqual(unauthorized.json()["error"]["code"], "API_HTTP_401")
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.config = Settings(api_token="test-token-" * 4, reports_path=Path(self.temp.name) / "reports.sqlite3")

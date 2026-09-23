@@ -199,6 +199,9 @@ class NeoScreen(private val activity: Activity, private val hasActiveCall: () ->
         space(reports)
         text(reports, "Up to 100 local reports. Paired reports also save to your Python service. Real calls are not connected.", 12f, muted)
         val settings = pages.getValue("Settings")
+        button(settings, "Recent errors and fixes", false) {
+            activity.startActivity(android.content.Intent(activity, ErrorHistoryActivity::class.java))
+        }
         text(settings, "You're in control.", 30f, ink, true)
         text(settings, "Choose your access. Change your mind anytime.", 15f, muted)
         space(settings)

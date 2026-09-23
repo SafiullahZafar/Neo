@@ -119,7 +119,7 @@ class VoiceService:
             return dict(self.job)
 
     def _generate(self, job_id, text):
-        state, message = "failed", "Voice engine failed. Check setup_voice.py on the Python server; no substitute voice was used."
+        state, message = "failed", "[VOICE_WORKER_FAILED] The worker failed or produced no valid output. Next: check voice setup and try a short preview; no substitute voice was used."
         try:
             with tempfile.TemporaryDirectory(prefix="job-", dir=self.root) as directory:
                 output = Path(directory) / "preview.wav"
@@ -141,9 +141,13 @@ class VoiceService:
                     os.replace(output, self.root / "preview.wav")
                     state, message = "ready", "Generated preview is ready. Voice similarity must be checked by listening."
         except subprocess.TimeoutExpired:
-            message = "Generation exceeded five minutes. Try shorter text or configure a supported GPU on the server."
+            message = "[VOICE_TIMEOUT] Generation exceeded five minutes. Next: try shorter text or configure a supported GPU on the server."
+        except FileNotFoundError:
+            message = "[VOICE_FILE_MISSING] A required engine or audio file was missing. Next: run setup_voice.py, check the reference sample, and retry."
+        except (OSError, wave.Error, ValueError):
+            message = "[VOICE_FILE_FAILED] An audio file could not be read, validated or saved. Next: check free storage and voice setup, then regenerate the preview."
         except Exception:
-            pass
+            message = "[VOICE_UNKNOWN] Preview generation failed for an unknown reason. Next: restart the server and retry a short preview; no substitute voice was used."
         with self.lock:
             if self.job and self.job["id"] == job_id:
                 self.job.update(state=state, message=message)

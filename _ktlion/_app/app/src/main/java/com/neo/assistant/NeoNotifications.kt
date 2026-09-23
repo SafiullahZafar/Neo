@@ -160,7 +160,10 @@ class NeoNotifications(private val context: Context) {
             if (ongoing) builder.setTimeoutAfter(60_000) else builder.setTimeoutAfter(86_400_000)
         }
 
-        return try { manager.notify(id(channel), builder.build()); true } catch (_: Exception) { false }
+        return try { manager.notify(id(channel), builder.build()); true } catch (_: Exception) {
+            ErrorHistory.describe(context, NeoProblem("NOTIFICATION_POST_FAILED", "Notification could not be posted", "Android rejected the notification request; the exact cause is unknown.", "Check Neo notification permission and channel settings. Open Neo to review locally saved reports."))
+            false
+        }
     }
 
     private fun id(channel: String) = when (channel) { CALLS -> 401; REPORTS -> 402; LIVE -> 404; else -> 403 }

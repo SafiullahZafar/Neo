@@ -227,7 +227,7 @@ class SimAudioDiagnosticsActivity : Activity() {
                 val body = JSONObject(ApiTransport(connection.url, connection.token(), BuildConfig.DEBUG).request("GET", "/v1/sim/readiness"))
                 "Python connected. SIM audio transport: ${body.optString("sim_audio_transport", "UNKNOWN")}.\n" +
                     "Live conversation: ${body.optString("conversation", "UNKNOWN")}. Desktop model files: Vosk=${body.optBoolean("vosk_files_present")}, Piper=${body.optBoolean("piper_files_present")}. Files alone do not prove model readiness.\nNo call audio was sent."
-            } catch (e: Exception) { ConnectionFailure.message(e) }
+            } catch (e: Exception) { ErrorHistory.describe(this, ConnectionFailure.problem(e)) }
             runOnUiThread { checkedBackend = false; if (!isDestroyed) backendStatus.text = message }
         }.start()
     }
